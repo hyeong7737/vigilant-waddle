@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>광학 글자 인식기</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; background-color: #222; color: white; }
+        .video-container { position: relative; display: inline-block; width: 100%; max-width: 400px; margin-bottom: 15px; }
+        video { width: 100%; border-radius: 10px; display: block; }
+        .guide-box { position: absolute; top: 30%; left: 10%; width: 80%; height: 40%; border: 3px solid #ff4444; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); pointer-events: none; }
+        button { padding: 15px 30px; font-size: 18px; font-weight: bold; background-color: #ff4444; color: white; border: none; border-radius: 8px; cursor: pointer; }
+        button:disabled { background-color: #555; cursor: not-allowed; }
+        #result { margin-top: 20px; font-size: 18px; min-height: 80px; border: 2px dashed #ff4444; padding: 15px; border-radius: 8px; background-color: #333; text-align: left; line-height: 1.5; }
+        #preview { margin-top: 10px; max-width: 100%; border: 1px solid #555; display: none; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <h2>📷 글자 추출 테스트</h2>
+    
+    <div class="video-container">
+        <video id="camera" autoplay playsinline></video>
+        <div class="guide-box"></div>
+    </div>
+    
+    <canvas id="canvas" style="display:none;"></canvas>
+    
+    <img id="preview" alt="보정 이미지 미리보기">
+
+    <br><br>
+    <button id="captureBtn">사진 찍고 글자 읽기</button>
+
+    <div id="result">글자를 화면 가운데 빨간 박스에 맞추고 촬영하세요.</div>
+
+    <script>
+        const video = document.getElementById('camera');
+        const canvas = document.getElementById('canvas');
+        const captureBtn = document.getElementById('captureBtn');
+        const resultDiv = document.getElementById('result');
+        const previewImg = document.getElementById('preview');
+
+        // 스마트폰 카메라 켜기
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', focusMode: 'continuous' } });
+                video.srcObject = stream;
+            } catch (err) {
+                resultDiv.innerHTML = "카메라 접근 권한이 필요합니다.";
+            }
+        }
+        startCamera();
+
+        // 버튼 누르면 사진 찍고 글자 분석 시작
+        captureBtn.addEventListener('click', async () => {
+            captureBtn.disabled = true;
+            resultDiv.innerHTML = "⏳ 글자를 추출하고 있습니다...";
+            previewImg.style.display = "block";
+
+            // 빨간 가이드라인 영역에 맞춰서 이미지 자르기
+            const vw = video.videoWidth; const vh = video.videoHeight;
+            const cropX = vw * 0.1; const cropY = vh * 0.3;
+            const cropW = vw * 0.8; const cropH = vh * 0.4;
+
+            canvas.width = cropW; canvas.height = cropH;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+            // 이미지 대비를 높이고 흑백으로 변환하여 글자를 뚜렷하게 만듦
+            let imgData = ctx.getImageData(0, 0, cropW, cropH);
+            let data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                let brightness = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
+                let color = brightness > 90 ? 255 : 0; 
+                data[i] = color; data[i+1] = color; data[i+2] = color;
+            }
+            ctx.putImageData(imgData, 0, 0);
+
+            // 변환된 이미지를 화면에 띄우기
+            const processedImage = canvas.toDataURL('image/png');
+            previewImg.src = processedImage;
+
+            // 테서랙트 인공지능으로 글자 읽어내기 (한글, 영어 동시 지원)
+            try {
+                const { data: { text } } = await Tesseract.recognize(processedImage, 'kor+eng');
+                
+                if(text.trim() === "") {
+                    resultDiv.innerHTML = "⚠️ 글자를 찾지 못했습니다. 초점이나 조명을 확인해 주세요.";
+                } else {
+                    resultDiv.innerHTML = "<strong>인식된 글자:</strong><br><br>" + text;
+                }
+            } catch (err) {
+                resultDiv.innerHTML = "오류가 발생했습니다.";
+            }
+            
+            captureBtn.disabled = false;
+        });
+    </script>
+</body>
+</html>
