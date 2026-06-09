@@ -124,7 +124,7 @@
                     for (const signal of signals) {
                         const encoder = new TextEncoder();
                         await brailleCharacteristic.writeValue(encoder.encode(signal + "\n"));
-                        await new Promise(resolve => setTimeout(resolve, 1500)); // 진동을 느낄 수 있도록 1.5초 간격
+                        await new Promise(resolve => setTimeout(resolve, 500)); // 진동을 느낄 수 있도록 1.5초 간격
                     }
                     status.innerHTML += "<br>✅ 모든 데이터 전송 완료!";
                 }
